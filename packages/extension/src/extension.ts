@@ -15,10 +15,12 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
   private readonly output = vscode.window.createOutputChannel('Local Review');
   private readonly statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   private readonly context: vscode.ExtensionContext;
+  readonly extensionUri: vscode.Uri;
   private lastError: string | undefined;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+    this.extensionUri = context.extensionUri;
     this.controller.commentingRangeProvider = {
       provideCommentingRanges: document =>
         this.sessionFor(document.uri) ? [new vscode.Range(0, 0, Math.max(0, document.lineCount - 1), 0)] : [],
@@ -147,6 +149,10 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
     });
     register('localReview.reply', async (reply: vscode.CommentReply) =>
       this.sessionOwning(reply.thread).update(reply.thread, { body: reply.text }),
+    );
+    register('localReview.startReply', async (thread: vscode.CommentThread) => this.sessionOwning(thread).startReply(thread));
+    register('localReview.cancelReply', async (reply: vscode.CommentReply) =>
+      this.sessionOwning(reply.thread).cancelReply(reply.thread),
     );
     register('localReview.publish', async (thread: vscode.CommentThread) =>
       this.sessionOwning(thread).update(thread, { status: 'open' }),

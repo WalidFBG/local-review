@@ -6,8 +6,17 @@ import { ReviewComment } from './reviewComment';
 
 const DEBOUNCE_MS = 200;
 
+const STATUS_LABELS: Record<Status, string> = {
+  draft: '📝 Draft · not sent to the builder yet',
+  open: '🔴 Open',
+  addressed: '🟡 Addressed',
+  disputed: '🟠 Disputed',
+  resolved: '✅ Resolved',
+};
+
 export interface SessionHost {
   readonly controller: vscode.CommentController;
+  readonly extensionUri: vscode.Uri;
   author(): string;
   reportError(error: unknown): void;
   onThreadsChanged(): void;
@@ -18,6 +27,7 @@ export class ReviewSession implements vscode.Disposable {
   private readonly host: SessionHost;
   private readonly threads = new Map<string, vscode.CommentThread>();
   private readonly ids = new Map<vscode.CommentThread, string>();
+  private readonly replying = new Set<string>();
   private readonly watchers: FSWatcher[] = [];
   private files = new Set<string>();
   private counts = { open: 0, draft: 0 };
@@ -107,8 +117,23 @@ export class ReviewSession implements vscode.Disposable {
   }
 
   async update(thread: vscode.CommentThread, update: { body?: string; status?: Status }): Promise<void> {
-    await this.review.update(this.host.author(), this.idOf(thread), update);
+    const id = this.idOf(thread);
+    await this.review.update(this.host.author(), id, update);
+    if (update.body !== undefined) {
+      this.replying.delete(id);
+    }
     await this.refresh();
+  }
+
+  startReply(thread: vscode.CommentThread): void {
+    this.replying.add(this.idOf(thread));
+    thread.canReply = true;
+    thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
+  }
+
+  cancelReply(thread: vscode.CommentThread): void {
+    this.replying.delete(this.idOf(thread));
+    thread.canReply = false;
   }
 
   async edit(comment: ReviewComment, body: string): Promise<void> {
@@ -216,11 +241,14 @@ export class ReviewSession implements vscode.Disposable {
       return;
     }
     target.range = range;
-    target.comments = located.comments.map(comment => new ReviewComment(comment, target, canEdit(author, located, comment)));
-    target.label = located.location.outdated ? `${located.status} · outdated` : located.status;
+    target.comments = located.comments.map(
+      comment => new ReviewComment(comment, target, canEdit(author, located, comment), this.host.extensionUri),
+    );
+    const label = STATUS_LABELS[located.status];
+    target.label = located.location.outdated ? `${label} · ⚠ outdated` : label;
     target.contextValue = located.status;
     target.state = located.status === 'resolved' ? vscode.CommentThreadState.Resolved : vscode.CommentThreadState.Unresolved;
-    target.canReply = true;
+    target.canReply = this.replying.has(located.id);
   }
 
   private isEditing(thread: vscode.CommentThread): boolean {
@@ -229,6 +257,7 @@ export class ReviewSession implements vscode.Disposable {
 
   private remove(id: string, thread: vscode.CommentThread): void {
     this.threads.delete(id);
+    this.replying.delete(id);
     this.ids.delete(thread);
     thread.dispose();
   }

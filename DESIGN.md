@@ -99,12 +99,13 @@ When the code moves, the thread should follow it. When the code under it changes
 ## VS Code extension
 
 - **Comments:** built on the built-in Comments API, which provides the gutter icons, inline threads, the reply box, and resolved/unresolved state in the Comments panel. There is no custom sidebar.
-- **Labels:** each thread is labelled with its status, plus `outdated` when it applies.
+- **Labels:** each thread is labelled with a coloured status marker, plus `outdated` when it applies. Each author role has its own coloured avatar.
+- **Reply box:** hidden until you press Reply on the thread, so threads stay compact to read.
 - **Watching:**
   - the current branch's review folder, so agent writes show up within about 200 ms;
   - `<git dir>/HEAD`, from `git rev-parse --git-dir`, to switch to the other branch's review on checkout (in a worktree this is the worktree's own folder, not the common dir);
   - saved and changed workspace files, to re-anchor.
-- **Thread actions:** reply, publish (drafts), resolve, reopen, set status, delete.
+- **Thread actions:** reply, approve and send to the builder (drafts), resolve, reopen, set status, delete.
 - **Comment actions:** edit.
 - **Commands:** publish all drafts, clear the branch's review, refresh.
 - **Status bar:** the number of open and draft threads on the current branch.

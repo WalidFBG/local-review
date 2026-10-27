@@ -25,11 +25,26 @@ Never act as `human`; only the user publishes drafts, deletes threads or clears 
 
    ```
    LRV_AUTHOR=reviewer lrv add <file> <start>-<end> --body-file - <<'EOF'
-   <the finding: what is wrong, a concrete failure scenario, and the suggested fix>
+   $(warning) **<one-line summary of the problem>**
+
+   <what is wrong and why it matters, in one to three sentences>
+
+   <details>
+   <summary>Failure scenario</summary>
+
+   <concrete inputs or sequence, and the wrong result>
+
+   </details>
+
+   **Suggestion**
+   ```diff
+   - <current code>
+   + <proposed code>
+   ```
    EOF
    ```
 
-   One finding per thread. Use line numbers from the current working tree.
+   One finding per thread. Use line numbers from the current working tree. The icon gives the severity: `$(error)` blocking, `$(warning)` important, `$(lightbulb)` consider. Leave out the failure scenario when it is obvious.
 3. Tell the user how many drafts you created; they will edit, delete or publish them in VS Code.
 4. On a re-review, run `LRV_AUTHOR=reviewer lrv list --status addressed,disputed`, read each with `lrv show <id>`, check the code, then either:
    - `lrv status <id> resolved`, or

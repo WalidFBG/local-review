@@ -1,0 +1,86 @@
+{
+  "name": "local-review",
+  "displayName": "Local Review",
+  "description": "Branch-specific review threads stored in .git, shared between agents and you.",
+  "version": "0.1.0",
+  "publisher": "local-review",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "dist/extension.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && esbuild src/extension.ts --bundle --platform=node --target=node20 --external:vscode --outfile=dist/extension.js",
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --skip-license --out local-review.vsix"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Local Review",
+      "properties": {
+        "localReview.author": {
+          "type": "string",
+          "default": "human",
+          "description": "Your author name on review comments: lower-case letters, digits and dashes. Any name other than reviewer or builder has the human's rights."
+        }
+      }
+    },
+    "commands": [
+      { "command": "localReview.createThread", "title": "Add Comment", "category": "Local Review" },
+      { "command": "localReview.reply", "title": "Reply", "category": "Local Review" },
+      { "command": "localReview.publish", "title": "Publish Draft", "category": "Local Review", "icon": "$(send)" },
+      { "command": "localReview.publishAll", "title": "Publish All Drafts", "category": "Local Review" },
+      { "command": "localReview.resolve", "title": "Resolve", "category": "Local Review", "icon": "$(check)" },
+      { "command": "localReview.reopen", "title": "Reopen", "category": "Local Review", "icon": "$(issue-reopened)" },
+      { "command": "localReview.setStatus", "title": "Set Status...", "category": "Local Review", "icon": "$(tag)" },
+      { "command": "localReview.deleteThread", "title": "Delete Thread", "category": "Local Review", "icon": "$(trash)" },
+      { "command": "localReview.editComment", "title": "Edit", "category": "Local Review", "icon": "$(edit)" },
+      { "command": "localReview.saveComment", "title": "Save", "category": "Local Review" },
+      { "command": "localReview.cancelEdit", "title": "Cancel", "category": "Local Review" },
+      { "command": "localReview.clearBranch", "title": "Clear Review on This Branch", "category": "Local Review" },
+      { "command": "localReview.refresh", "title": "Refresh", "category": "Local Review" }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "localReview.createThread", "when": "false" },
+        { "command": "localReview.reply", "when": "false" },
+        { "command": "localReview.publish", "when": "false" },
+        { "command": "localReview.resolve", "when": "false" },
+        { "command": "localReview.reopen", "when": "false" },
+        { "command": "localReview.setStatus", "when": "false" },
+        { "command": "localReview.deleteThread", "when": "false" },
+        { "command": "localReview.editComment", "when": "false" },
+        { "command": "localReview.saveComment", "when": "false" },
+        { "command": "localReview.cancelEdit", "when": "false" }
+      ],
+      "comments/commentThread/context": [
+        { "command": "localReview.createThread", "group": "inline", "when": "commentController == localReview && commentThreadIsEmpty" },
+        { "command": "localReview.reply", "group": "inline", "when": "commentController == localReview && !commentThreadIsEmpty" }
+      ],
+      "comments/commentThread/title": [
+        { "command": "localReview.publish", "group": "navigation@1", "when": "commentController == localReview && commentThread == draft" },
+        { "command": "localReview.resolve", "group": "navigation@2", "when": "commentController == localReview && commentThread =~ /^(open|addressed|disputed)$/" },
+        { "command": "localReview.reopen", "group": "navigation@3", "when": "commentController == localReview && commentThread =~ /^(addressed|disputed|resolved)$/" },
+        { "command": "localReview.setStatus", "group": "navigation@4", "when": "commentController == localReview && commentThread != draft && !commentThreadIsEmpty" },
+        { "command": "localReview.deleteThread", "group": "navigation@5", "when": "commentController == localReview && !commentThreadIsEmpty" }
+      ],
+      "comments/comment/title": [
+        { "command": "localReview.editComment", "group": "inline", "when": "commentController == localReview && comment == editable" }
+      ],
+      "comments/comment/context": [
+        { "command": "localReview.cancelEdit", "group": "inline@1", "when": "commentController == localReview" },
+        { "command": "localReview.saveComment", "group": "inline@2", "when": "commentController == localReview" }
+      ]
+    }
+  },
+  "devDependencies": {
+    "@local-review/core": "*",
+    "@types/vscode": "~1.90.0",
+    "@vscode/vsce": "^3.2.0"
+  }
+}

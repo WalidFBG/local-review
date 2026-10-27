@@ -58,9 +58,14 @@ export function checkEdit(author: string, thread: Thread, comment: Comment): voi
   if (comment.body === undefined) {
     throw new Error(`Comment ${comment.id} has no text to edit.`);
   }
-  const ownComment = comment.author === author;
-  const humanEditingDraft = isHuman(author) && thread.status === 'draft';
-  if (!ownComment && !humanEditingDraft) {
+  if (!canEdit(author, thread, comment)) {
     throw new Error(`${author} cannot edit ${comment.author}'s comment ${comment.id}.`);
   }
+}
+
+export function canEdit(author: string, thread: Thread, comment: Comment): boolean {
+  if (!canSee(author, thread) || comment.body === undefined) {
+    return false;
+  }
+  return comment.author === author || (isHuman(author) && thread.status === 'draft');
 }

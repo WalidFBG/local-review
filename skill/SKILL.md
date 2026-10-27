@@ -7,10 +7,12 @@ description: Local, branch-specific code review threads stored in .git and shown
 
 Review threads live in `.git/review/<branch>/` of the current repository and show inline in the user's VS Code. Always go through the `lrv` CLI; never read or write the files directly. Run it from inside the repository; it works on the current branch.
 
-Set your role on every call with the `LRV_AUTHOR` environment variable:
+Pass your role on every single call with `--author`. The CLI refuses to run without it. Don't rely on `LRV_AUTHOR`: environment variables don't carry over between your shell calls, and `VAR=value command` is Bash-only syntax.
 
-- `LRV_AUTHOR=reviewer` when you are reviewing.
-- `LRV_AUTHOR=builder` when you are fixing the code in response to a review.
+- `--author reviewer` when you are reviewing.
+- `--author builder` when you are fixing the code in response to a review.
+
+Comment bodies go in a file (in your scratchpad), passed with `--body-file <file>`; this works the same in Bash and PowerShell.
 
 Never act as `human`; only the user publishes drafts, deletes threads or clears a review.
 
@@ -21,10 +23,15 @@ Never act as `human`; only the user publishes drafts, deletes threads or clears 
 ## As the reviewer
 
 1. Review the branch's changes (usually `git diff main...HEAD` plus uncommitted work).
-2. For each finding, create a draft on the exact lines:
+2. For each finding, write the body to a file and create a draft on the exact lines:
 
    ```
-   LRV_AUTHOR=reviewer lrv add <file> <start>-<end> --body-file - <<'EOF'
+   lrv add <file> <start>-<end> --author reviewer --body-file <body file>
+   ```
+
+   The body uses this layout:
+
+   ````
    $(warning) **<one-line summary of the problem>**
 
    <what is wrong and why it matters, in one to three sentences>
@@ -41,21 +48,20 @@ Never act as `human`; only the user publishes drafts, deletes threads or clears 
    - <current code>
    + <proposed code>
    ```
-   EOF
-   ```
+   ````
 
    One finding per thread. Use line numbers from the current working tree. The icon gives the severity: `$(error)` blocking, `$(warning)` important, `$(lightbulb)` consider. Leave out the failure scenario when it is obvious.
 3. Tell the user how many drafts you created; they will edit, delete or publish them in VS Code.
-4. On a re-review, run `LRV_AUTHOR=reviewer lrv list --status addressed,disputed`, read each with `lrv show <id>`, check the code, then either:
-   - `lrv status <id> resolved`, or
-   - `lrv reply <id> --status open --body "<why it is not done yet>"`.
+4. On a re-review, run `lrv list --status addressed,disputed --author reviewer`, read each with `lrv show <id> --author reviewer`, check the code, then either:
+   - `lrv status <id> resolved --author reviewer`, or
+   - `lrv reply <id> --status open --body-file <file> --author reviewer`, saying why it is not done yet.
 
 ## As the builder
 
-1. `LRV_AUTHOR=builder lrv list --status open --json` lists what to do, with current line numbers (`startLine`/`endLine` are already adjusted for later edits; `outdated: true` means the code under the thread has changed since it was written, and `snippet` holds the original code).
+1. `lrv list --status open --json --author builder` lists what to do, with current line numbers (`startLine`/`endLine` are already adjusted for later edits; `outdated: true` means the code under the thread has changed since it was written, and `snippet` holds the original code).
 2. Fix each thread, then reply:
-   - `lrv reply <id> --status addressed --body "<what changed, and the commit if any>"`, or
-   - `lrv reply <id> --status disputed --body "<why you are not changing it>"`.
+   - `lrv reply <id> --status addressed --body-file <file> --author builder`, saying what changed and the commit if any, or
+   - `lrv reply <id> --status disputed --body-file <file> --author builder`, saying why you are not changing it.
 3. You cannot resolve threads, and you cannot see drafts.
 
 ## Other commands

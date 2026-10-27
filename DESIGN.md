@@ -127,7 +127,7 @@ lrv clear
 lrv move <old branch> <new branch>
 ```
 
-- **Author:** `--author`, or the `LRV_AUTHOR` environment variable, `human` by default. A reviewer agent runs with `LRV_AUTHOR=reviewer`, and a builder agent with `LRV_AUTHOR=builder`.
+- **Author:** `--author`, or the `LRV_AUTHOR` environment variable. There is no default: falling back to `human` would silently give an agent the most privileged role, so the CLI refuses to run without an author. Agents pass `--author reviewer` or `--author builder` on every call, which works in any shell and doesn't depend on environment variables surviving between calls.
 - **Context:** the repo and branch come from the current directory, the same way git does it.
 - **`list`:** shows every thread except drafts by default. Drafts are only listed when asked for with `--status draft`, and never to the builder.
 - **Line numbers in output:** `list` and `show` give re-anchored line numbers, so the builder edits the right place.

@@ -17,7 +17,8 @@ const USAGE = `lrv: local review threads for the current branch
   lrv clear --yes
   lrv move <old branch> <new branch>
 
-The author is --author, or LRV_AUTHOR, or "human". Statuses: ${STATUSES.join(', ')}.`;
+Every command needs an author: --author <name>, or the LRV_AUTHOR environment variable.
+Agents use reviewer or builder; any other name has the human's rights. Statuses: ${STATUSES.join(', ')}.`;
 
 interface Arguments {
   positional: string[];
@@ -163,7 +164,10 @@ async function main(argv: string[]): Promise<void> {
     console.log(USAGE);
     return;
   }
-  const author = flag(args, 'author') ?? process.env.LRV_AUTHOR ?? 'human';
+  const author = flag(args, 'author') ?? process.env.LRV_AUTHOR;
+  if (author === undefined || author.length === 0) {
+    throw new Error('No author: pass --author <name> (reviewer, builder, or your own name), or set LRV_AUTHOR.');
+  }
   const review = await Review.open(process.cwd());
 
   switch (command) {

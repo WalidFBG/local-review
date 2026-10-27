@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { STATUSES, Status } from '@local-review/core';
 import { ReviewComment } from './reviewComment';
 import { ReviewSession, SessionHost } from './reviewSession';
-import { ThreadsTree, isThreadNode } from './threadsTree';
+import { SectionTint, ThreadsTree, isThreadNode } from './threadsTree';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const extension = new LocalReviewExtension(context);
@@ -37,6 +37,7 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
       this.controller,
       this.output,
       this.treeView,
+      vscode.window.registerFileDecorationProvider(new SectionTint()),
       fileWatcher,
       fileWatcher.onDidChange(uri => this.onFileChanged(uri)),
       fileWatcher.onDidCreate(uri => this.onFileChanged(uri)),

@@ -1,4 +1,3 @@
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { LocatedThread, Status } from '@local-review/core';
 import { displayName } from './reviewComment';
@@ -9,13 +8,8 @@ interface Section {
   title: string;
   statuses: Status[];
   expanded: boolean;
-}
-
-interface FileNode {
-  kind: 'file';
-  section: Section;
-  session: ReviewSession;
-  file: string;
+  icon: string;
+  colour: string;
 }
 
 export interface ThreadNode {
@@ -24,22 +18,30 @@ export interface ThreadNode {
   thread: LocatedThread;
 }
 
-type Node = Section | FileNode | ThreadNode;
+type Node = Section | ThreadNode;
 
 const SECTIONS: Section[] = [
-  { kind: 'section', title: 'Needs your approval', statuses: ['draft'], expanded: true },
-  { kind: 'section', title: 'Waiting for you', statuses: ['addressed', 'disputed'], expanded: true },
-  { kind: 'section', title: 'With the builder', statuses: ['open'], expanded: true },
-  { kind: 'section', title: 'Resolved', statuses: ['resolved'], expanded: false },
+  { kind: 'section', title: 'Needs your approval', statuses: ['draft'], expanded: true, icon: 'edit', colour: 'charts.purple' },
+  { kind: 'section', title: 'Waiting for you', statuses: ['addressed', 'disputed'], expanded: true, icon: 'bell-dot', colour: 'charts.yellow' },
+  { kind: 'section', title: 'With the builder', statuses: ['open'], expanded: true, icon: 'tools', colour: 'charts.blue' },
+  { kind: 'section', title: 'Resolved', statuses: ['resolved'], expanded: false, icon: 'pass-filled', colour: 'charts.green' },
 ];
 
-const STATUS_ICONS: Record<Status, vscode.ThemeIcon> = {
-  draft: new vscode.ThemeIcon('edit', new vscode.ThemeColor('charts.purple')),
-  open: new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.red')),
-  addressed: new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.yellow')),
-  disputed: new vscode.ThemeIcon('question', new vscode.ThemeColor('charts.orange')),
-  resolved: new vscode.ThemeIcon('pass-filled', new vscode.ThemeColor('charts.green')),
-};
+export const TINT_SCHEME = 'local-review-tint';
+
+export class SectionTint implements vscode.FileDecorationProvider {
+  provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+    if (uri.scheme !== TINT_SCHEME) {
+      return undefined;
+    }
+    const section = SECTIONS.find(candidate => candidate.title === decodeURIComponent(uri.authority));
+    return section ? { color: new vscode.ThemeColor(section.colour) } : undefined;
+  }
+}
+
+function tintUri(section: Section, key: string): vscode.Uri {
+  return vscode.Uri.from({ scheme: TINT_SCHEME, authority: encodeURIComponent(section.title), path: `/${key}` });
+}
 
 const PREVIEW_LENGTH = 90;
 
@@ -69,19 +71,11 @@ export class ThreadsTree implements vscode.TreeDataProvider<Node> {
       return SECTIONS.filter(section => this.inSection(section).length > 0);
     }
     if (node.kind === 'section') {
-      const files = new Map<string, FileNode>();
-      for (const { session, thread } of this.inSection(node)) {
-        const key = `${session.root}\0${thread.location.file}`;
-        if (!files.has(key)) {
-          files.set(key, { kind: 'file', section: node, session, file: thread.location.file });
-        }
-      }
-      return [...files.values()].sort((a, b) => a.file.localeCompare(b.file));
-    }
-    if (node.kind === 'file') {
-      return this.inSection(node.section)
-        .filter(({ session, thread }) => session === node.session && thread.location.file === node.file)
-        .sort((a, b) => a.thread.location.startLine - b.thread.location.startLine);
+      return this.inSection(node).sort(
+        (a, b) =>
+          a.thread.location.file.localeCompare(b.thread.location.file) ||
+          a.thread.location.startLine - b.thread.location.startLine,
+      );
     }
     return [];
   }
@@ -93,26 +87,24 @@ export class ThreadsTree implements vscode.TreeDataProvider<Node> {
         node.expanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
       );
       item.id = `section:${node.title}`;
+      item.iconPath = new vscode.ThemeIcon(node.icon, new vscode.ThemeColor(node.colour));
+      item.resourceUri = tintUri(node, 'section');
       item.description = `${this.inSection(node).length}`;
-      return item;
-    }
-    if (node.kind === 'file') {
-      const item = new vscode.TreeItem(path.posix.basename(node.file), vscode.TreeItemCollapsibleState.Expanded);
-      item.id = `file:${node.section.title}:${node.session.root}:${node.file}`;
-      item.resourceUri = vscode.Uri.file(path.join(node.session.root, node.file));
-      item.description = path.posix.dirname(node.file) === '.' ? '' : path.posix.dirname(node.file);
       return item;
     }
     return this.threadItem(node);
   }
 
   private threadItem({ thread }: ThreadNode): vscode.TreeItem {
+    const section = SECTIONS.find(candidate => candidate.statuses.includes(thread.status))!;
     const firstComment = thread.comments.find(comment => comment.body !== undefined);
     const item = new vscode.TreeItem(preview(firstComment?.body ?? ''), vscode.TreeItemCollapsibleState.None);
     item.id = `thread:${thread.id}`;
-    item.iconPath = STATUS_ICONS[thread.status];
-    const { startLine, endLine } = thread.location;
-    item.description = (startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`) + (thread.location.outdated ? ' · outdated' : '');
+    item.iconPath = new vscode.ThemeIcon('blank');
+    item.resourceUri = tintUri(section, thread.id);
+    item.description = [thread.status === 'disputed' ? 'disputed' : '', thread.location.outdated ? 'outdated' : '']
+      .filter(part => part.length > 0)
+      .join(' · ');
     item.tooltip = tooltip(thread);
     item.contextValue = thread.status;
     item.command = { command: 'localReview.reveal', title: 'Go to Thread', arguments: [thread.id] };
@@ -136,7 +128,11 @@ function preview(body: string): string {
 function tooltip(thread: LocatedThread): vscode.MarkdownString {
   const comments = thread.comments.filter(comment => comment.body !== undefined);
   const first = comments[0];
-  const markdown = new vscode.MarkdownString(`**${displayName(first.author)}** · ${thread.status}\n\n${first.body}`);
+  const { file, startLine, endLine } = thread.location;
+  const lines = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
+  const markdown = new vscode.MarkdownString(
+    `**${displayName(first.author)}** · ${thread.status} · \`${file}:${lines}\`\n\n${first.body}`,
+  );
   const latest = comments[comments.length - 1];
   if (comments.length > 1) {
     markdown.appendMarkdown(`\n\n---\n\n**${displayName(latest.author)}** (latest of ${comments.length - 1} replies)\n\n${latest.body}`);

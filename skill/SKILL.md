@@ -36,12 +36,8 @@ Never act as `human`; only the user publishes drafts, deletes threads or clears 
 
    <what is wrong and why it matters, in one to three sentences>
 
-   <details>
-   <summary>Failure scenario</summary>
-
+   **Failure scenario**
    <concrete inputs or sequence, and the wrong result>
-
-   </details>
 
    **Suggestion**
    ```diff
@@ -50,7 +46,7 @@ Never act as `human`; only the user publishes drafts, deletes threads or clears 
    ```
    ````
 
-   One finding per thread. Use line numbers from the current working tree. The icon gives the severity: `$(error)` blocking, `$(warning)` important, `$(lightbulb)` consider. Leave out the failure scenario when it is obvious.
+   One finding per thread. Use line numbers from the current working tree. The icon gives the severity: `$(error)` blocking, `$(warning)` important, `$(lightbulb)` consider. Leave out the failure scenario when it is obvious. Don't use HTML such as `<details>`: VS Code's comment box doesn't resize when it expands.
 3. Tell the user how many drafts you created; they will edit, delete or publish them in VS Code.
 4. On a re-review, run `lrv list --status addressed,disputed --author reviewer`, read each with `lrv show <id> --author reviewer`, check the code, then either:
    - `lrv status <id> resolved --author reviewer`, or

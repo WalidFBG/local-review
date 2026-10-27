@@ -16,7 +16,8 @@ export class ReviewComment implements vscode.Comment {
     this.commentId = comment.id;
     this.thread = thread;
     this.savedBody = comment.body ?? '';
-    this.body = new vscode.MarkdownString(comment.body ?? '');
+    this.body = new vscode.MarkdownString(comment.body ?? '', true);
+    this.body.supportHtml = true;
     this.author = {
       name: displayName(comment.author),
       iconPath: vscode.Uri.joinPath(extensionUri, 'media', `${avatar(comment.author)}.svg`),

@@ -16,7 +16,7 @@ export class ReviewComment implements vscode.Comment {
     this.commentId = comment.id;
     this.thread = thread;
     this.savedBody = comment.body ?? '';
-    this.body = comment.body === undefined ? statusOnly(comment) : new vscode.MarkdownString(comment.body);
+    this.body = new vscode.MarkdownString(comment.body ?? '');
     this.author = {
       name: displayName(comment.author),
       iconPath: vscode.Uri.joinPath(extensionUri, 'media', `${avatar(comment.author)}.svg`),
@@ -27,7 +27,7 @@ export class ReviewComment implements vscode.Comment {
   }
 }
 
-function displayName(author: string): string {
+export function displayName(author: string): string {
   if (author === REVIEWER) {
     return 'Reviewer agent';
   }
@@ -41,13 +41,9 @@ function avatar(author: string): string {
   return author === REVIEWER || author === BUILDER ? author : 'human';
 }
 
-function statusOnly(comment: Comment): vscode.MarkdownString {
-  return new vscode.MarkdownString(`*Set the status to **${comment.status}**.*`);
-}
-
 function label(comment: Comment): string | undefined {
   const parts: string[] = [];
-  if (comment.status !== undefined && comment.body !== undefined) {
+  if (comment.status !== undefined && comment.status !== 'draft' && comment.status !== 'open') {
     parts.push(`→ ${comment.status}`);
   }
   if (comment.editedBy !== undefined) {

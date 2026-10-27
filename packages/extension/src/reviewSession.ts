@@ -2,7 +2,7 @@ import { FSWatcher, mkdirSync, watch } from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { LocatedThread, Review, Status, canEdit, reviewRoot } from '@local-review/core';
-import { ReviewComment } from './reviewComment';
+import { ReviewComment, displayName } from './reviewComment';
 
 const DEBOUNCE_MS = 200;
 
@@ -13,6 +13,8 @@ const STATUS_LABELS: Record<Status, string> = {
   disputed: '🟠 Disputed',
   resolved: '✅ Resolved',
 };
+
+const STATUSES_SHOWING_WHO: Status[] = ['addressed', 'disputed', 'resolved'];
 
 export interface SessionHost {
   readonly controller: vscode.CommentController;
@@ -30,7 +32,7 @@ export class ReviewSession implements vscode.Disposable {
   private readonly replying = new Set<string>();
   private readonly watchers: FSWatcher[] = [];
   private files = new Set<string>();
-  private counts = { open: 0, draft: 0 };
+  private located: LocatedThread[] = [];
   private timer: NodeJS.Timeout | undefined;
   private headTimer: NodeJS.Timeout | undefined;
   private refreshing: Promise<void> = Promise.resolve();
@@ -61,12 +63,23 @@ export class ReviewSession implements vscode.Disposable {
     return this.review.repo.branch;
   }
 
-  get openCount(): number {
-    return this.counts.open;
+  get snapshot(): readonly LocatedThread[] {
+    return this.located;
   }
 
-  get draftCount(): number {
-    return this.counts.draft;
+  commentThread(id: string): vscode.CommentThread {
+    const thread = this.threads.get(id);
+    if (!thread) {
+      throw new Error(`Thread ${id} is no longer in the review.`);
+    }
+    return thread;
+  }
+
+  async reveal(id: string): Promise<void> {
+    const thread = this.commentThread(id);
+    const range = thread.range ?? new vscode.Range(0, 0, 0, 0);
+    await vscode.window.showTextDocument(thread.uri, { selection: new vscode.Range(range.start, range.start), preserveFocus: false });
+    thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
   }
 
   contains(uri: vscode.Uri): boolean {
@@ -216,10 +229,7 @@ export class ReviewSession implements vscode.Disposable {
       }
     }
     this.files = new Set(located.flatMap(thread => [thread.file, thread.location.file]));
-    this.counts = {
-      open: located.filter(thread => thread.status === 'open').length,
-      draft: located.filter(thread => thread.status === 'draft').length,
-    };
+    this.located = located;
     this.host.onThreadsChanged();
   }
 
@@ -241,11 +251,10 @@ export class ReviewSession implements vscode.Disposable {
       return;
     }
     target.range = range;
-    target.comments = located.comments.map(
-      comment => new ReviewComment(comment, target, canEdit(author, located, comment), this.host.extensionUri),
-    );
-    const label = STATUS_LABELS[located.status];
-    target.label = located.location.outdated ? `${label} · ⚠ outdated` : label;
+    target.comments = located.comments
+      .filter(comment => comment.body !== undefined)
+      .map(comment => new ReviewComment(comment, target, canEdit(author, located, comment), this.host.extensionUri));
+    target.label = threadLabel(located);
     target.contextValue = located.status;
     target.state = located.status === 'resolved' ? vscode.CommentThreadState.Resolved : vscode.CommentThreadState.Unresolved;
     target.canReply = this.replying.has(located.id);
@@ -267,4 +276,16 @@ export class ReviewSession implements vscode.Disposable {
       this.remove(id, thread);
     }
   }
+}
+
+function threadLabel(thread: LocatedThread): string {
+  const parts = [STATUS_LABELS[thread.status]];
+  const setBy = [...thread.comments].reverse().find(comment => comment.status !== undefined)?.author;
+  if (setBy !== undefined && STATUSES_SHOWING_WHO.includes(thread.status)) {
+    parts.push(displayName(setBy));
+  }
+  if (thread.location.outdated) {
+    parts.push('⚠ outdated');
+  }
+  return parts.join(' · ');
 }

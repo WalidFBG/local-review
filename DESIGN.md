@@ -98,7 +98,9 @@ When the code moves, the thread should follow it. When the code under it changes
 
 ## VS Code extension
 
-- **Comments:** built on the built-in Comments API, which provides the gutter icons, inline threads, the reply box, and resolved/unresolved state in the Comments panel. There is no custom sidebar.
+- **Comments:** built on the built-in Comments API, which provides the gutter icons, inline threads and the reply box.
+- **Sidebar:** a Local Review view in the activity bar, because the built-in Comments panel can't be grouped or trimmed. Sections follow who acts next: *Needs your approval* (drafts), *Waiting for you* (addressed, disputed), *With the builder* (open) and *Resolved* (collapsed). Under each, threads are grouped by file; a row is a coloured status icon, the start of the first comment and the line. Hover shows the comment and the latest reply; clicking opens the thread. Rows have approve, resolve and reopen buttons. The view's badge counts threads that need you.
+- **Status changes:** not shown as comments. The thread title says who set the current status, and the history stays in the event files and `lrv show`.
 - **Labels:** each thread is labelled with a coloured status marker, plus `outdated` when it applies. Each author role has its own coloured avatar.
 - **Reply box:** hidden until you press Reply on the thread, so threads stay compact to read.
 - **Watching:**
@@ -108,7 +110,6 @@ When the code moves, the thread should follow it. When the code under it changes
 - **Thread actions:** reply, approve and send to the builder (drafts), resolve, reopen, set status, delete.
 - **Comment actions:** edit.
 - **Commands:** publish all drafts, clear the branch's review, refresh.
-- **Status bar:** the number of open and draft threads on the current branch.
 - **Your author name:** the `localReview.author` setting, `human` by default.
 
 ## CLI for agents

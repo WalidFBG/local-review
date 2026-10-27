@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { STATUSES, Status } from '@local-review/core';
 import { ReviewComment } from './reviewComment';
 import { ReviewSession, SessionHost } from './reviewSession';
+import { ThreadsTree, isThreadNode } from './threadsTree';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const extension = new LocalReviewExtension(context);
@@ -13,7 +14,8 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
   readonly controller = vscode.comments.createCommentController('localReview', 'Local Review');
   private readonly sessions = new Map<string, ReviewSession>();
   private readonly output = vscode.window.createOutputChannel('Local Review');
-  private readonly statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
+  private readonly tree = new ThreadsTree(() => this.allSessions());
+  private readonly treeView = vscode.window.createTreeView('localReview.threads', { treeDataProvider: this.tree });
   private readonly context: vscode.ExtensionContext;
   readonly extensionUri: vscode.Uri;
   private lastError: string | undefined;
@@ -34,7 +36,7 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
     subscriptions.push(
       this.controller,
       this.output,
-      this.statusBar,
+      this.treeView,
       fileWatcher,
       fileWatcher.onDidChange(uri => this.onFileChanged(uri)),
       fileWatcher.onDidCreate(uri => this.onFileChanged(uri)),
@@ -65,16 +67,14 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
 
   onThreadsChanged(): void {
     this.lastError = undefined;
-    const sessions = [...new Set(this.sessions.values())];
-    const open = sessions.reduce((total, session) => total + session.openCount, 0);
-    const drafts = sessions.reduce((total, session) => total + session.draftCount, 0);
-    if (open === 0 && drafts === 0) {
-      this.statusBar.hide();
-      return;
-    }
-    this.statusBar.text = `$(comment-discussion) ${open} open` + (drafts > 0 ? ` · ${drafts} draft${drafts === 1 ? '' : 's'}` : '');
-    this.statusBar.tooltip = `Local review on ${sessions.map(session => session.branch).join(', ')}`;
-    this.statusBar.show();
+    this.tree.refresh();
+    const needsYou = this.tree.needsYouCount();
+    this.treeView.badge = needsYou > 0 ? { value: needsYou, tooltip: `${needsYou} thread(s) need you` } : undefined;
+    this.treeView.description = this.allSessions().map(session => session.branch).join(', ');
+  }
+
+  private allSessions(): ReviewSession[] {
+    return [...new Set(this.sessions.values())];
   }
 
   dispose(): void {
@@ -113,11 +113,19 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
   }
 
   private sessionFor(uri: vscode.Uri): ReviewSession | undefined {
-    return [...new Set(this.sessions.values())].find(session => session.contains(uri));
+    return this.allSessions().find(session => session.contains(uri));
+  }
+
+  private threadArgument(argument: unknown): { session: ReviewSession; thread: vscode.CommentThread } {
+    if (isThreadNode(argument)) {
+      return { session: argument.session, thread: argument.session.commentThread(argument.thread.id) };
+    }
+    const thread = argument as vscode.CommentThread;
+    return { session: this.sessionOwning(thread), thread };
   }
 
   private sessionOwning(thread: vscode.CommentThread): ReviewSession {
-    const session = [...new Set(this.sessions.values())].find(candidate => candidate.owns(thread));
+    const session = this.allSessions().find(candidate => candidate.owns(thread));
     if (!session) {
       throw new Error('This thread is not part of the local review.');
     }
@@ -154,15 +162,18 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
     register('localReview.cancelReply', async (reply: vscode.CommentReply) =>
       this.sessionOwning(reply.thread).cancelReply(reply.thread),
     );
-    register('localReview.publish', async (thread: vscode.CommentThread) =>
-      this.sessionOwning(thread).update(thread, { status: 'open' }),
-    );
-    register('localReview.resolve', async (thread: vscode.CommentThread) =>
-      this.sessionOwning(thread).update(thread, { status: 'resolved' }),
-    );
-    register('localReview.reopen', async (thread: vscode.CommentThread) =>
-      this.sessionOwning(thread).update(thread, { status: 'open' }),
-    );
+    register('localReview.publish', async (argument: unknown) => {
+      const { session, thread } = this.threadArgument(argument);
+      await session.update(thread, { status: 'open' });
+    });
+    register('localReview.resolve', async (argument: unknown) => {
+      const { session, thread } = this.threadArgument(argument);
+      await session.update(thread, { status: 'resolved' });
+    });
+    register('localReview.reopen', async (argument: unknown) => {
+      const { session, thread } = this.threadArgument(argument);
+      await session.update(thread, { status: 'open' });
+    });
     register('localReview.setStatus', async (thread: vscode.CommentThread) => {
       const choices = STATUSES.filter(status => status !== 'draft' && status !== thread.contextValue);
       const status = await vscode.window.showQuickPick(choices, { placeHolder: 'New status' });
@@ -200,7 +211,7 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
       void vscode.window.showInformationMessage(`Published ${published} draft${published === 1 ? '' : 's'}.`);
     });
     register('localReview.clearBranch', async () => {
-      const sessions = [...new Set(this.sessions.values())];
+      const sessions = this.allSessions();
       const session =
         sessions.length === 1
           ? sessions[0]
@@ -222,9 +233,16 @@ class LocalReviewExtension implements SessionHost, vscode.Disposable {
         await session.clear();
       }
     });
+    register('localReview.reveal', async (id: string) => {
+      const session = this.allSessions().find(candidate => candidate.snapshot.some(thread => thread.id === id));
+      if (!session) {
+        throw new Error(`Thread ${id} is no longer in the review.`);
+      }
+      await session.reveal(id);
+    });
     register('localReview.refresh', async () => {
       this.lastError = undefined;
-      await Promise.all([...new Set(this.sessions.values())].map(session => session.refresh()));
+      await Promise.all(this.allSessions().map(session => session.refresh()));
     });
   }
 }

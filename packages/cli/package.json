@@ -1,0 +1,17 @@
+{
+  "name": "@local-review/cli",
+  "version": "0.1.0",
+  "description": "Local, branch-specific review threads for agents and humans.",
+  "bin": {
+    "lrv": "dist/lrv.js"
+  },
+  "files": [
+    "dist/lrv.js"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && esbuild src/main.ts --bundle --platform=node --target=node20 --outfile=dist/lrv.js"
+  },
+  "devDependencies": {
+    "@local-review/core": "*"
+  }
+}
